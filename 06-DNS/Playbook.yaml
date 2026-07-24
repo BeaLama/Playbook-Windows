@@ -1,0 +1,302 @@
+playbook:
+  id: INC-011
+
+  title: DNS
+
+  description: >
+    Procedimiento para diagnosticar y resolver incidencias relacionadas con la
+    resolución de nombres DNS en equipos Windows.
+
+  category: Networking
+
+  severity: Medium
+
+  estimated_time: 20-45 minutos
+
+  platform:
+    - Windows 10
+    - Windows 11
+    - Windows Server 2019
+    - Windows Server 2022
+    - Windows Server 2025
+
+  permissions:
+    - Usuario
+    - Administrador Local
+    - Administrador de Dominio (si aplica)
+
+  trigger:
+    - No se resuelven nombres.
+    - Solo funciona mediante IP.
+    - Error "DNS_PROBE_FINISHED_NXDOMAIN".
+    - Outlook no conecta.
+    - No localiza el dominio.
+    - No encuentra recursos compartidos.
+
+tasks:
+
+  - id: TASK-001
+
+    name: Confirmar la incidencia
+
+    objective: >
+      Verificar que realmente se trata de un problema DNS.
+
+    checklist:
+      - ¿Puede hacer ping a una IP?
+      - ¿Puede resolver nombres?
+      - ¿El problema afecta a un único equipo?
+      - ¿Afecta a varios usuarios?
+      - ¿Ha ocurrido tras un cambio reciente?
+
+    success:
+      next: TASK-002
+
+  - id: TASK-002
+
+    name: Verificar conectividad IP
+
+    objective: >
+      Confirmar que existe conectividad antes de analizar DNS.
+
+    tool: CMD
+
+    command: |
+      ping 8.8.8.8
+
+    expected_output: >
+      Respuesta correcta desde Internet.
+
+    decision:
+
+      - condition: Sin respuesta
+
+        next: PLAYBOOK-INC-010
+
+      - condition: Respuesta correcta
+
+        next: TASK-003
+
+  - id: TASK-003
+
+    name: Comprobar configuración DNS
+
+    objective: >
+      Revisar los servidores DNS configurados.
+
+    tool: PowerShell
+
+    command: |
+      Get-DnsClientServerAddress
+
+    expected_output: >
+      Lista de servidores DNS.
+
+    success:
+      next: TASK-004
+
+    script: Scripts/Verificar-DNS.ps1
+
+  - id: TASK-004
+
+    name: Resolver un dominio
+
+    objective: >
+      Comprobar si el servidor DNS responde correctamente.
+
+    tool: CMD
+
+    command: |
+      nslookup google.com
+
+    expected_output: >
+      Dirección IP del dominio.
+
+    decision:
+
+      - condition: Resuelve correctamente
+
+        next: TASK-005
+
+      - condition: Error de resolución
+
+        next: TASK-006
+
+  - id: TASK-005
+
+    name: Comparar con otro servidor DNS
+
+    objective: >
+      Determinar si el problema se encuentra en el servidor DNS configurado.
+
+    tool: CMD
+
+    command: |
+      nslookup google.com 8.8.8.8
+
+    expected_output: >
+      Dirección IP devuelta por Google DNS.
+
+    decision:
+
+      - condition: Solo funciona con 8.8.8.8
+
+        next: TASK-009
+
+      - condition: No funciona tampoco
+
+        next: TASK-006
+
+  - id: TASK-006
+
+    name: Vaciar caché DNS
+
+    objective: >
+      Eliminar posibles registros corruptos almacenados localmente.
+
+    tool: CMD
+
+    command: |
+      ipconfig /flushdns
+
+    expected_output: >
+      Caché DNS vaciada correctamente.
+
+    success:
+      next: TASK-007
+
+    script: Scripts/Flush-DNS.ps1
+
+  - id: TASK-007
+
+    name: Renovar configuración IP
+
+    objective: >
+      Solicitar una nueva configuración de red.
+
+    tool: CMD
+
+    command: |
+      ipconfig /release
+
+      ipconfig /renew
+
+    expected_output: >
+      Nueva dirección IP obtenida.
+
+    success:
+      next: TASK-008
+
+    script: Scripts/Renovar-IP.ps1
+
+  - id: TASK-008
+
+    name: Reiniciar el servicio DNS Client
+
+    objective: >
+      Reiniciar el servicio de caché DNS del cliente.
+
+    tool: PowerShell
+
+    command: |
+      Restart-Service Dnscache
+
+    expected_output: >
+      Servicio reiniciado.
+
+    success:
+      next: TASK-004
+
+    script: Scripts/Reiniciar-DNSClient.ps1
+
+  - id: TASK-009
+
+    name: Comprobar el servidor DNS
+
+    objective: >
+      Verificar que el servidor DNS corporativo está operativo.
+
+    checklist:
+      - Servicio DNS iniciado.
+      - Puerto 53 disponible.
+      - Sin errores recientes.
+      - Zona cargada correctamente.
+      - Replicación correcta (AD).
+
+    success:
+      next: TASK-010
+
+    script: Scripts/Comprobar-Servidor-DNS.ps1
+
+  - id: TASK-010
+
+    name: Revisar registros DNS
+
+    objective: >
+      Confirmar que el registro solicitado existe.
+
+    checklist:
+      - Registro A.
+      - Registro AAAA.
+      - Registro CNAME.
+      - Registro MX.
+      - Registro SRV.
+      - Registro PTR.
+
+    success:
+      next: TASK-011
+
+    script: Scripts/Buscar-Registros.ps1
+
+  - id: TASK-011
+
+    name: Validar resolución
+
+    objective: >
+      Confirmar que la incidencia ha sido resuelta.
+
+    validation:
+      - nslookup correcto.
+      - Resolve-DnsName correcto.
+      - Navegación funcional.
+      - Outlook operativo.
+      - Recursos compartidos accesibles.
+      - Inicio de sesión correcto.
+
+    success:
+      next: TASK-012
+
+  - id: TASK-012
+
+    name: Documentar la incidencia
+
+    objective: >
+      Registrar toda la información obtenida.
+
+    checklist:
+      - Equipo afectado.
+      - Usuario.
+      - DNS configurados.
+      - Resultado de nslookup.
+      - Acciones realizadas.
+      - Tiempo de resolución.
+      - Causa raíz.
+
+    success:
+      next: END
+
+flow:
+
+  START:
+    next: TASK-001
+
+  END:
+    status: Completed
+
+  ESCALATE:
+    status: Escalated
+
+    notify:
+      - Administrador IT
+      - Administrador de Red
+      - Administrador de Active Directory

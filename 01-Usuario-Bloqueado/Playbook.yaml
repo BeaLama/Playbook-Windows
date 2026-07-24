@@ -1,0 +1,244 @@
+playbook:
+  id: INC-001
+  title: Usuario bloqueado
+  description: >
+    Procedimiento para diagnosticar y resolver el bloqueo de una cuenta
+    de usuario en Active Directory.
+
+  category: Identity
+  severity: Medium
+
+  estimated_time: 15m
+
+  platform:
+    - Windows Server
+    - Active Directory
+
+  permissions:
+    - Domain Admin
+    - Account Operators
+
+  trigger:
+    - Usuario no puede iniciar sesión.
+    - Mensaje indicando que la cuenta está bloqueada.
+    - Ticket de soporte.
+    - Alerta del SIEM.
+
+tasks:
+
+  - id: TASK-001
+
+    name: Confirmar que la cuenta está bloqueada
+
+    objective: >
+      Verificar que la cuenta aparece bloqueada en Active Directory.
+
+    tool: PowerShell
+
+    command: |
+      Search-ADAccount -LockedOut |
+      Select-Object Name, SamAccountName
+
+    expected_output: >
+      El usuario aparece listado como bloqueado.
+
+    success:
+      next: TASK-002
+
+    failure:
+      next: END
+      reason: >
+        La cuenta no está bloqueada. Utilizar el playbook de autenticación.
+
+    script: Scripts/Buscar-Bloqueados.ps1
+
+  - id: TASK-002
+
+    name: Comprobar el estado del usuario
+
+    objective: >
+      Obtener información detallada del usuario afectado.
+
+    tool: PowerShell
+
+    command: |
+      Get-ADUser <usuario> -Properties LockedOut,Enabled,LastLogonDate |
+      Select Name,LockedOut,Enabled,LastLogonDate
+
+    expected_output: >
+      LockedOut = True
+
+    success:
+      next: TASK-003
+
+    failure:
+      next: END
+
+    script: Scripts/Estado-Usuario.ps1
+
+  - id: TASK-003
+
+    name: Localizar el controlador de dominio
+
+    objective: >
+      Identificar qué controlador de dominio registró el bloqueo.
+
+    tool: PowerShell
+
+    command: |
+      Get-WinEvent -FilterHashtable @{
+          LogName='Security'
+          ID=4740
+      } |
+      Select-Object TimeCreated,MachineName,Message -First 5
+
+    expected_output: >
+      Se obtiene al menos un evento 4740.
+
+    success:
+      next: TASK-004
+
+    failure:
+      next: TASK-005
+
+    script: Scripts/Buscar-4740.ps1
+
+  - id: TASK-004
+
+    name: Identificar el origen del bloqueo
+
+    objective: >
+      Determinar desde qué equipo se están produciendo los intentos
+      fallidos de autenticación.
+
+    tool: Event Viewer
+
+    action: >
+      Revisar el campo "Caller Computer Name" del Event ID 4740.
+
+    expected_output: >
+      Equipo origen identificado.
+
+    success:
+      next: TASK-006
+
+    failure:
+      next: TASK-005
+
+  - id: TASK-005
+
+    name: Revisar registros adicionales
+
+    objective: >
+      Buscar eventos relacionados cuando no exista un Event ID 4740.
+
+    tool: PowerShell
+
+    command: |
+      Get-WinEvent -LogName Security -MaxEvents 100 |
+      Where-Object {$_.Id -in 4624,4625,4771,4776} |
+      Select-Object TimeCreated,Id,Message
+
+    expected_output: >
+      Eventos de autenticación encontrados.
+
+    success:
+      next: TASK-006
+
+    failure:
+      next: ESCALATE
+
+    script: Scripts/Buscar-Eventos.ps1
+
+  - id: TASK-006
+
+    name: Corregir la causa del bloqueo
+
+    objective: >
+      Eliminar el origen que provoca los intentos fallidos.
+
+    checklist:
+      - Outlook con contraseña antigua
+      - VPN
+      - Teléfono móvil
+      - Servicio Windows
+      - Unidad de red
+      - Tarea programada
+      - Otro equipo
+      - Aplicación de terceros
+
+    success:
+      next: TASK-007
+
+  - id: TASK-007
+
+    name: Desbloquear la cuenta
+
+    objective: >
+      Desbloquear la cuenta únicamente cuando la causa haya sido corregida.
+
+    tool: PowerShell
+
+    command: |
+      Unlock-ADAccount -Identity <usuario>
+
+    expected_output: >
+      La cuenta queda desbloqueada.
+
+    success:
+      next: TASK-008
+
+    failure:
+      next: ESCALATE
+
+    script: Scripts/Desbloquear.ps1
+
+  - id: TASK-008
+
+    name: Validar el acceso
+
+    objective: >
+      Confirmar que el usuario puede iniciar sesión correctamente.
+
+    validation:
+      - Inicio de sesión correcto
+      - Outlook operativo
+      - Teams operativo
+      - Acceso a recursos compartidos
+      - VPN funcional
+
+    success:
+      next: TASK-009
+
+    failure:
+      next: TASK-006
+
+  - id: TASK-009
+
+    name: Cerrar incidencia
+
+    objective: >
+      Registrar la resolución y cerrar el ticket.
+
+    checklist:
+      - Usuario confirma funcionamiento
+      - Ticket actualizado
+      - Evidencias adjuntadas
+      - Tiempo registrado
+
+    success:
+      next: END
+
+flow:
+
+  START:
+    next: TASK-001
+
+  END:
+    status: Completed
+
+  ESCALATE:
+    status: Escalated
+    notify:
+      - Administrador de Sistemas
+      - Equipo de Seguridad

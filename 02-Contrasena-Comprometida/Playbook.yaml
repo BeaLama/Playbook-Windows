@@ -1,0 +1,300 @@
+playbook:
+  id: INC-002
+  title: Contraseña comprometida
+  description: >
+    Procedimiento para responder ante una sospecha o confirmación de que
+    las credenciales de un usuario han sido comprometidas.
+
+  category: Identity
+
+  severity: High
+
+  estimated_time: 20m
+
+  platform:
+    - Windows Server
+    - Active Directory
+    - Microsoft 365
+
+  permissions:
+    - Domain Admin
+    - Microsoft 365 Administrator
+
+  trigger:
+    - El usuario informa que ha introducido la contraseña en una web sospechosa.
+    - Alerta de Microsoft Entra ID.
+    - Alerta del SIEM.
+    - Inicio de sesión desde un país desconocido.
+    - Detección de credenciales filtradas.
+    - Accesos fuera del horario habitual.
+
+tasks:
+
+  - id: TASK-001
+
+    name: Confirmar la incidencia
+
+    objective: >
+      Determinar si la contraseña ha sido realmente comprometida.
+
+    checklist:
+      - Confirmar quién reporta la incidencia.
+      - Identificar la cuenta afectada.
+      - Registrar fecha y hora.
+      - Registrar origen del aviso.
+
+    success:
+      next: TASK-002
+
+  - id: TASK-002
+
+    name: Revisar últimos inicios de sesión
+
+    objective: >
+      Analizar los accesos recientes para detectar actividad sospechosa.
+
+    tool: PowerShell
+
+    command: |
+      Get-ADUser <usuario> -Properties LastLogonDate |
+      Select Name,LastLogonDate
+
+    expected_output: >
+      Se obtiene la fecha del último inicio de sesión.
+
+    success:
+      next: TASK-003
+
+    script: Scripts/Ultimo-InicioSesion.ps1
+
+  - id: TASK-003
+
+    name: Buscar accesos anómalos en Microsoft 365
+
+    objective: >
+      Comprobar si existen autenticaciones desde ubicaciones o dispositivos
+      desconocidos.
+
+    tool: Microsoft 365 Admin Center
+
+    action: >
+      Revisar el historial de inicio de sesión del usuario.
+
+    expected_output: >
+      Confirmar si existen accesos sospechosos.
+
+    success:
+      next: TASK-004
+
+  - id: TASK-004
+
+    name: Comprobar pertenencia a filtraciones conocidas
+
+    objective: >
+      Verificar si las credenciales aparecen en una brecha de datos pública.
+
+    checklist:
+      - Have I Been Pwned
+      - Intelligence X
+      - DeHashed (si la organización dispone de licencia)
+
+    success:
+      next: TASK-005
+
+  - id: TASK-005
+
+    name: Bloquear temporalmente la cuenta
+
+    objective: >
+      Evitar nuevos accesos mientras se analiza la incidencia.
+
+    tool: PowerShell
+
+    command: |
+      Disable-ADAccount -Identity <usuario>
+
+    expected_output: >
+      Cuenta deshabilitada.
+
+    success:
+      next: TASK-006
+
+    failure:
+      next: ESCALATE
+
+    script: Scripts/Bloquear-Cuenta.ps1
+
+  - id: TASK-006
+
+    name: Restablecer la contraseña
+
+    objective: >
+      Asignar una nueva contraseña segura al usuario.
+
+    tool: PowerShell
+
+    command: |
+      Set-ADAccountPassword -Identity <usuario> -Reset
+
+    expected_output: >
+      Contraseña modificada correctamente.
+
+    success:
+      next: TASK-007
+
+    failure:
+      next: ESCALATE
+
+    script: Scripts/Reset-Contrasena.ps1
+
+  - id: TASK-007
+
+    name: Forzar cambio de contraseña
+
+    objective: >
+      Obligar al usuario a establecer una nueva contraseña
+      en el siguiente inicio de sesión.
+
+    tool: PowerShell
+
+    command: |
+      Set-ADUser <usuario> -ChangePasswordAtLogon $true
+
+    expected_output: >
+      El usuario deberá cambiar la contraseña al iniciar sesión.
+
+    success:
+      next: TASK-008
+
+    script: Scripts/Forzar-Cambio.ps1
+
+  - id: TASK-008
+
+    name: Revocar sesiones activas
+
+    objective: >
+      Invalidar todas las sesiones abiertas con las credenciales
+      comprometidas.
+
+    checklist:
+      - Microsoft 365
+      - VPN
+      - Outlook
+      - Teams
+      - OneDrive
+      - Navegadores
+
+    success:
+      next: TASK-009
+
+  - id: TASK-009
+
+    name: Revisar persistencia
+
+    objective: >
+      Verificar que no existan mecanismos de persistencia creados por un
+      atacante.
+
+    checklist:
+      - Reglas de Outlook
+      - Reenvíos automáticos
+      - Aplicaciones OAuth
+      - Dispositivos registrados
+      - Tokens activos
+      - Credenciales almacenadas
+
+    success:
+      next: TASK-010
+
+  - id: TASK-010
+
+    name: Analizar actividad reciente
+
+    objective: >
+      Comprobar si el atacante realizó acciones con la cuenta.
+
+    checklist:
+      - Descarga masiva de archivos
+      - Eliminación de correos
+      - Envío de phishing interno
+      - Creación de usuarios
+      - Cambios de permisos
+      - Accesos a recursos sensibles
+
+    success:
+      next: TASK-011
+
+  - id: TASK-011
+
+    name: Rehabilitar la cuenta
+
+    objective: >
+      Habilitar nuevamente la cuenta una vez eliminada la amenaza.
+
+    tool: PowerShell
+
+    command: |
+      Enable-ADAccount -Identity <usuario>
+
+    expected_output: >
+      Cuenta habilitada.
+
+    success:
+      next: TASK-012
+
+    script: Scripts/Habilitar-Cuenta.ps1
+
+  - id: TASK-012
+
+    name: Validar funcionamiento
+
+    objective: >
+      Confirmar que el usuario puede acceder correctamente a todos los
+      servicios corporativos.
+
+    validation:
+      - Inicio de sesión correcto.
+      - Outlook operativo.
+      - Teams operativo.
+      - OneDrive sincronizando.
+      - VPN funcional.
+      - Acceso a recursos compartidos.
+
+    success:
+      next: TASK-013
+
+    failure:
+      next: TASK-006
+
+  - id: TASK-013
+
+    name: Documentar la incidencia
+
+    objective: >
+      Registrar toda la información obtenida durante la investigación.
+
+    checklist:
+      - Fecha del compromiso.
+      - Método de detección.
+      - Servicios afectados.
+      - Acciones realizadas.
+      - Tiempo de resolución.
+      - Recomendaciones.
+
+    success:
+      next: END
+
+flow:
+
+  START:
+    next: TASK-001
+
+  END:
+    status: Completed
+
+  ESCALATE:
+    status: Escalated
+    notify:
+      - Administrador de Sistemas
+      - Responsable de Seguridad
+      - SOC

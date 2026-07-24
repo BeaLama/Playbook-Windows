@@ -1,0 +1,259 @@
+playbook:
+  id: INC-012
+
+  title: DHCP
+
+  description: >
+    Procedimiento para diagnosticar y resolver incidencias relacionadas con la
+    obtención automática de direcciones IP mediante DHCP.
+
+  category: Networking
+
+  severity: Medium
+
+  estimated_time: 20-40 minutos
+
+  platform:
+    - Windows 10
+    - Windows 11
+    - Windows Server 2019
+    - Windows Server 2022
+    - Windows Server 2025
+
+  permissions:
+    - Usuario
+    - Administrador Local
+    - Administrador de Red
+    - Administrador de Dominio (si aplica)
+
+  trigger:
+    - Dirección APIPA (169.254.x.x)
+    - Sin dirección IP
+    - Sin acceso a Internet
+    - Error de conectividad
+    - No obtiene concesión DHCP
+    - Renovación DHCP fallida
+
+tasks:
+
+  - id: TASK-001
+
+    name: Confirmar la incidencia
+
+    objective: >
+      Verificar que el problema está relacionado con DHCP.
+
+    checklist:
+      - ¿Tiene dirección IP?
+      - ¿La IP pertenece al rango esperado?
+      - ¿Aparece una dirección APIPA?
+      - ¿Afecta a varios equipos?
+      - ¿El problema apareció recientemente?
+
+    success:
+      next: TASK-002
+
+  - id: TASK-002
+
+    name: Comprobar configuración IP
+
+    objective: >
+      Revisar la configuración de red obtenida por el cliente.
+
+    tool: CMD
+
+    command: |
+      ipconfig /all
+
+    expected_output: >
+      Configuración IP completa.
+
+    success:
+      next: TASK-003
+
+    script: Scripts/Verificar-IP.ps1
+
+  - id: TASK-003
+
+    name: Comprobar dirección APIPA
+
+    objective: >
+      Verificar si Windows ha asignado una dirección automática.
+
+    decision:
+
+      - condition: Dirección 169.254.x.x
+
+        next: TASK-004
+
+      - condition: Dirección válida
+
+        next: TASK-006
+
+  - id: TASK-004
+
+    name: Renovar concesión DHCP
+
+    objective: >
+      Solicitar una nueva dirección IP al servidor DHCP.
+
+    tool: CMD
+
+    command: |
+      ipconfig /release
+
+      ipconfig /renew
+
+    expected_output: >
+      Nueva dirección IP obtenida.
+
+    success:
+      next: TASK-005
+
+    script: Scripts/Renovar-Concesion.ps1
+
+  - id: TASK-005
+
+    name: Validar nueva configuración
+
+    objective: >
+      Confirmar que el cliente ha recibido correctamente la configuración.
+
+    checklist:
+      - Dirección IP.
+      - Máscara.
+      - Gateway.
+      - DNS.
+
+    success:
+      next: TASK-006
+
+  - id: TASK-006
+
+    name: Comprobar conectividad con el servidor DHCP
+
+    objective: >
+      Verificar que el servidor DHCP es accesible.
+
+    tool: PowerShell
+
+    command: |
+      Test-NetConnection <ServidorDHCP>
+
+    expected_output: >
+      El servidor responde correctamente.
+
+    success:
+      next: TASK-007
+
+    script: Scripts/Buscar-Servidor-DHCP.ps1
+
+  - id: TASK-007
+
+    name: Comprobar ámbito DHCP
+
+    objective: >
+      Verificar que existen direcciones disponibles.
+
+    checklist:
+      - Scope activo.
+      - Direcciones disponibles.
+      - Sin agotamiento.
+      - Exclusiones correctas.
+
+    success:
+      next: TASK-008
+
+    script: Scripts/Comprobar-Scope.ps1
+
+  - id: TASK-008
+
+    name: Revisar concesiones
+
+    objective: >
+      Confirmar que el cliente dispone de una concesión válida.
+
+    tool: PowerShell
+
+    command: |
+      Get-DhcpServerv4Lease
+
+    expected_output: >
+      Concesión encontrada.
+
+    success:
+      next: TASK-009
+
+    script: Scripts/Buscar-Lease.ps1
+
+  - id: TASK-009
+
+    name: Comprobar servicio DHCP
+
+    objective: >
+      Verificar que el servicio DHCP está operativo.
+
+    checklist:
+      - Servicio iniciado.
+      - Sin errores.
+      - Eventos recientes normales.
+      - Puerto UDP 67 operativo.
+
+    success:
+      next: TASK-010
+
+    script: Scripts/Comprobar-Servicio-DHCP.ps1
+
+  - id: TASK-010
+
+    name: Validar funcionamiento
+
+    objective: >
+      Confirmar que el equipo obtiene configuración automáticamente.
+
+    validation:
+      - Dirección IP válida.
+      - Gateway correcta.
+      - DNS correcto.
+      - Navegación funcional.
+      - Ping al gateway.
+      - Renovación DHCP correcta.
+
+    success:
+      next: TASK-011
+
+  - id: TASK-011
+
+    name: Documentar incidencia
+
+    objective: >
+      Registrar la resolución del incidente.
+
+    checklist:
+      - Equipo afectado.
+      - Usuario.
+      - Dirección IP.
+      - Scope utilizado.
+      - Servidor DHCP.
+      - Acciones realizadas.
+      - Causa raíz.
+      - Tiempo de resolución.
+
+    success:
+      next: END
+
+flow:
+
+  START:
+    next: TASK-001
+
+  END:
+    status: Completed
+
+  ESCALATE:
+    status: Escalated
+
+    notify:
+      - Administrador IT
+      - Administrador de Red
+      - Administrador de Sistemas

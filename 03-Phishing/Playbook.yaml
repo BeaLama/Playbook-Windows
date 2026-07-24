@@ -1,0 +1,340 @@
+playbook:
+  id: INC-003
+
+  title: Phishing
+
+  description: >
+    Procedimiento para responder ante un posible correo, SMS o mensaje
+    de phishing recibido por un usuario de la organización.
+
+  category: Email Security
+
+  severity: High
+
+  estimated_time: 20m
+
+  platform:
+    - Windows
+    - Microsoft 365
+    - Exchange Online
+    - Outlook
+
+  permissions:
+    - Usuario afectado
+    - Administrador de Microsoft 365
+    - Administrador de Exchange
+    - Administrador de Sistemas
+
+  trigger:
+    - Usuario reporta un correo sospechoso.
+    - Alerta del filtro antispam.
+    - Alerta del SIEM.
+    - Detección por Microsoft Defender.
+    - Reporte desde Outlook.
+
+tasks:
+
+  - id: TASK-001
+
+    name: Obtener información del incidente
+
+    objective: >
+      Registrar toda la información posible antes de realizar cualquier acción.
+
+    checklist:
+      - Usuario afectado.
+      - Fecha y hora.
+      - Asunto del correo.
+      - Remitente.
+      - Destinatarios.
+      - Si ha abierto el correo.
+      - Si ha hecho clic.
+      - Si ha descargado archivos.
+      - Si ha introducido credenciales.
+
+    success:
+      next: TASK-002
+
+  - id: TASK-002
+
+    name: Aislar el correo
+
+    objective: >
+      Evitar que el usuario siga interactuando con el mensaje.
+
+    checklist:
+      - No responder.
+      - No reenviar.
+      - No eliminar hasta finalizar el análisis.
+      - No abrir enlaces.
+      - No abrir adjuntos.
+
+    success:
+      next: TASK-003
+
+  - id: TASK-003
+
+    name: Analizar el remitente
+
+    objective: >
+      Verificar la legitimidad del remitente.
+
+    checklist:
+      - Dominio correcto.
+      - Dirección completa.
+      - Reply-To.
+      - Display Name.
+      - Errores ortográficos.
+      - Dominio recientemente registrado.
+
+    success:
+      next: TASK-004
+
+  - id: TASK-004
+
+    name: Analizar enlaces
+
+    objective: >
+      Identificar enlaces potencialmente maliciosos.
+
+    checklist:
+      - Comparar URL visible y real.
+      - Buscar dominios similares.
+      - Revisar uso de acortadores.
+      - Verificar HTTPS.
+      - Analizar mediante VirusTotal.
+      - Analizar mediante URLScan.
+      - Analizar mediante URLVoid.
+
+    success:
+      next: TASK-005
+
+  - id: TASK-005
+
+    name: Analizar archivos adjuntos
+
+    objective: >
+      Determinar si los adjuntos contienen contenido malicioso.
+
+    checklist:
+      - Comprobar extensión.
+      - Calcular hash SHA256.
+      - Analizar en VirusTotal.
+      - Revisar macros.
+      - Revisar firmas digitales.
+      - Verificar tipo real del archivo.
+
+    success:
+      next: TASK-006
+
+  - id: TASK-006
+
+    name: Determinar el impacto
+
+    objective: >
+      Clasificar el incidente según las acciones realizadas por el usuario.
+
+    decision:
+
+      - condition: >
+          El usuario NO abrió el correo.
+
+        next: TASK-011
+
+      - condition: >
+          El usuario abrió el correo pero no interactuó.
+
+        next: TASK-007
+
+      - condition: >
+          El usuario hizo clic en un enlace.
+
+        next: TASK-008
+
+      - condition: >
+          El usuario introdujo credenciales.
+
+        next: PLAYBOOK-INC-002
+
+      - condition: >
+          El usuario ejecutó un archivo.
+
+        next: PLAYBOOK-INC-004
+
+  - id: TASK-007
+
+    name: Revisar actividad posterior
+
+    objective: >
+      Confirmar que el simple visionado del correo no produjo actividad
+      sospechosa.
+
+    checklist:
+      - Sin descargas.
+      - Sin conexiones extrañas.
+      - Sin procesos nuevos.
+      - Sin alertas del antivirus.
+
+    success:
+      next: TASK-011
+
+  - id: TASK-008
+
+    name: Revisar navegación
+
+    objective: >
+      Determinar si el enlace abrió una página fraudulenta o descargó
+      contenido automáticamente.
+
+    checklist:
+      - Historial del navegador.
+      - Descargas recientes.
+      - Caché del navegador.
+      - Cookies creadas.
+      - Certificados descargados.
+
+    success:
+      next: TASK-009
+
+  - id: TASK-009
+
+    name: Analizar el equipo
+
+    objective: >
+      Verificar que no se ha producido una infección.
+
+    checklist:
+      - Escaneo antivirus.
+      - Procesos sospechosos.
+      - Servicios nuevos.
+      - Persistencia.
+      - Tareas programadas.
+      - Conexiones activas.
+      - Inicio automático.
+
+    success:
+      next: TASK-010
+
+    script: Scripts/Analizar-Equipo.ps1
+
+  - id: TASK-010
+
+    name: Contener el incidente
+
+    objective: >
+      Evitar que el posible compromiso continúe propagándose.
+
+    checklist:
+      - Desconectar el equipo de la red si es necesario.
+      - Bloquear el dominio.
+      - Bloquear la URL.
+      - Bloquear el hash.
+      - Bloquear el remitente.
+      - Añadir IOC al SIEM.
+
+    success:
+      next: TASK-011
+
+  - id: TASK-011
+
+    name: Buscar otros destinatarios
+
+    objective: >
+      Determinar si el correo ha llegado a más usuarios.
+
+    checklist:
+      - Buscar por asunto.
+      - Buscar por remitente.
+      - Buscar por Message-ID.
+      - Buscar por dominio.
+
+    success:
+      next: TASK-012
+
+    script: Scripts/Buscar-Correos.ps1
+
+  - id: TASK-012
+
+    name: Eliminar el correo
+
+    objective: >
+      Retirar el mensaje de todos los buzones afectados.
+
+    tool: Exchange Online
+
+    action: >
+      Ejecutar una búsqueda y eliminación mediante las herramientas de
+      administración disponibles en Microsoft 365.
+
+    success:
+      next: TASK-013
+
+  - id: TASK-013
+
+    name: Bloquear indicadores
+
+    objective: >
+      Impedir que nuevos correos similares lleguen a la organización.
+
+    checklist:
+      - Dominio.
+      - Dirección de correo.
+      - URL.
+      - Hash.
+      - Dirección IP.
+      - Adjuntos.
+
+    success:
+      next: TASK-014
+
+  - id: TASK-014
+
+    name: Notificar al usuario
+
+    objective: >
+      Informar al usuario del resultado de la investigación y recordar las
+      buenas prácticas.
+
+    checklist:
+      - Explicar el incidente.
+      - Confirmar si hubo compromiso.
+      - Recordar cómo identificar futuros ataques.
+
+    success:
+      next: TASK-015
+
+  - id: TASK-015
+
+    name: Documentar y cerrar
+
+    objective: >
+      Registrar toda la información del incidente.
+
+    checklist:
+      - Fecha.
+      - Usuario.
+      - Remitente.
+      - Asunto.
+      - IOC obtenidos.
+      - Herramientas utilizadas.
+      - Acciones realizadas.
+      - Tiempo de resolución.
+      - Lecciones aprendidas.
+
+    success:
+      next: END
+
+flow:
+
+  START:
+    next: TASK-001
+
+  END:
+    status: Completed
+
+  ESCALATE:
+    status: Escalated
+    notify:
+      - Administrador de Sistemas
+      - Equipo de Seguridad
+      - SOC

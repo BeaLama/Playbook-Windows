@@ -1,0 +1,362 @@
+playbook:
+  id: INC-005
+
+  title: Ransomware
+
+  description: >
+    Procedimiento para contener, analizar, erradicar y recuperar un equipo
+    afectado por ransomware.
+
+  category: Endpoint Security
+
+  severity: Critical
+
+  estimated_time: Variable
+
+  platform:
+    - Windows 10
+    - Windows 11
+    - Windows Server 2019
+    - Windows Server 2022
+    - Windows Server 2025
+
+  permissions:
+    - Administrador Local
+    - Administrador de Dominio
+    - Equipo SOC
+    - Equipo de Infraestructura
+
+  trigger:
+    - Archivos cifrados.
+    - Nota de rescate.
+    - Extensiones desconocidas.
+    - Detección del antivirus.
+    - Alerta EDR.
+    - Alerta SIEM.
+
+tasks:
+
+  - id: TASK-001
+
+    name: Confirmar la infección
+
+    objective: >
+      Verificar que realmente se trata de un incidente de ransomware.
+
+    checklist:
+      - Archivos cifrados.
+      - Nota de rescate.
+      - Cambios masivos de extensión.
+      - Antivirus alerta ransomware.
+      - Usuarios afectados.
+      - Recursos compartidos afectados.
+
+    success:
+      next: TASK-002
+
+  - id: TASK-002
+
+    name: Contener inmediatamente el equipo
+
+    objective: >
+      Evitar la propagación del ransomware.
+
+    actions:
+      - Desconectar cable de red.
+      - Desactivar Wi-Fi.
+      - Desconectar VPN.
+      - No apagar el equipo.
+      - Informar al SOC.
+
+    success:
+      next: TASK-003
+
+  - id: TASK-003
+
+    name: Obtener información básica
+
+    objective: >
+      Recopilar información inicial antes de modificar el sistema.
+
+    tool: PowerShell
+
+    command: |
+      hostname
+      whoami
+      systeminfo
+      Get-Date
+
+    expected_output: >
+      Información del equipo.
+
+    success:
+      next: TASK-004
+
+    script: Scripts/Informacion-Basica.ps1
+
+  - id: TASK-004
+
+    name: Identificar el ransomware
+
+    objective: >
+      Obtener indicadores para identificar la familia de ransomware.
+
+    checklist:
+      - Nombre de la nota de rescate.
+      - Extensión de los archivos.
+      - Hash del ejecutable.
+      - Directorio de ejecución.
+      - URL de contacto.
+      - Correo del atacante.
+
+    success:
+      next: TASK-005
+
+    script: Scripts/Identificar-Ransomware.ps1
+
+  - id: TASK-005
+
+    name: Buscar movimiento lateral
+
+    objective: >
+      Comprobar si el ransomware ha alcanzado otros equipos.
+
+    checklist:
+      - Recursos compartidos.
+      - Servidores.
+      - Equipos vecinos.
+      - Active Directory.
+      - NAS.
+      - Máquinas virtuales.
+
+    success:
+      next: TASK-006
+
+    script: Scripts/Movimiento-Lateral.ps1
+
+  - id: TASK-006
+
+    name: Revisar procesos activos
+
+    objective: >
+      Identificar procesos responsables del cifrado.
+
+    tool: PowerShell
+
+    command: |
+      Get-Process
+
+    expected_output: >
+      Procesos activos.
+
+    success:
+      next: TASK-007
+
+    script: Scripts/Analizar-Procesos.ps1
+
+  - id: TASK-007
+
+    name: Revisar conexiones de red
+
+    objective: >
+      Detectar comunicaciones con servidores externos.
+
+    tool: PowerShell
+
+    command: |
+      netstat -ano
+
+    expected_output: >
+      Conexiones activas.
+
+    success:
+      next: TASK-008
+
+    script: Scripts/Analizar-Conexiones.ps1
+
+  - id: TASK-008
+
+    name: Comprobar Shadow Copies
+
+    objective: >
+      Verificar si las copias de volumen siguen disponibles.
+
+    tool: CMD
+
+    command: |
+      vssadmin list shadows
+
+    expected_output: >
+      Lista de Shadow Copies.
+
+    success:
+      next: TASK-009
+
+    failure:
+      next: TASK-009
+
+    script: Scripts/Comprobar-ShadowCopies.ps1
+
+  - id: TASK-009
+
+    name: Revisar copias de seguridad
+
+    objective: >
+      Comprobar si existen backups válidos.
+
+    checklist:
+      - Backup local.
+      - Backup NAS.
+      - Backup offline.
+      - Backup cloud.
+      - Última fecha válida.
+
+    success:
+      next: TASK-010
+
+  - id: TASK-010
+
+    name: Buscar IOC
+
+    objective: >
+      Obtener indicadores de compromiso para ampliar la investigación.
+
+    checklist:
+      - Hashes.
+      - IPs.
+      - Dominios.
+      - Procesos.
+      - Servicios.
+      - Scheduled Tasks.
+      - Claves Run.
+      - Usuarios creados.
+
+    success:
+      next: TASK-011
+
+    script: Scripts/Obtener-IOC.ps1
+
+  - id: TASK-011
+
+    name: Erradicar la amenaza
+
+    objective: >
+      Eliminar el malware responsable del cifrado.
+
+    checklist:
+      - Antivirus.
+      - Defender.
+      - EDR.
+      - Eliminación manual.
+      - Cuarentena.
+
+    success:
+      next: TASK-012
+
+  - id: TASK-012
+
+    name: Restaurar el sistema
+
+    objective: >
+      Recuperar los datos desde una copia de seguridad verificada.
+
+    checklist:
+      - Restaurar backup.
+      - Validar integridad.
+      - Verificar aplicaciones.
+      - Verificar permisos.
+      - Verificar comparticiones.
+
+    success:
+      next: TASK-013
+
+  - id: TASK-013
+
+    name: Validar recuperación
+
+    objective: >
+      Confirmar que la infraestructura vuelve a estar operativa.
+
+    validation:
+      - Sin procesos sospechosos.
+      - Sin conexiones sospechosas.
+      - Archivos accesibles.
+      - Usuarios operativos.
+      - Antivirus limpio.
+      - Eventos normales.
+
+    success:
+      next: TASK-014
+
+  - id: TASK-014
+
+    name: Investigación del acceso inicial
+
+    objective: >
+      Determinar cómo consiguió entrar el atacante.
+
+    checklist:
+      - Phishing.
+      - RDP.
+      - VPN.
+      - Vulnerabilidad.
+      - Credenciales comprometidas.
+      - USB.
+
+    decision:
+
+      - condition: Phishing
+
+        next: PLAYBOOK-INC-003
+
+      - condition: Credenciales comprometidas
+
+        next: PLAYBOOK-INC-002
+
+      - condition: Malware previo
+
+        next: PLAYBOOK-INC-004
+
+      - condition: Desconocido
+
+        next: TASK-015
+
+  - id: TASK-015
+
+    name: Documentar el incidente
+
+    objective: >
+      Registrar toda la información obtenida durante la gestión.
+
+    checklist:
+      - Equipo afectado.
+      - Usuarios.
+      - IOC.
+      - Familia ransomware.
+      - Hashes.
+      - Dominios.
+      - IPs.
+      - Tiempo de resolución.
+      - Sistemas afectados.
+      - Backups utilizados.
+      - Lecciones aprendidas.
+
+    success:
+      next: END
+
+flow:
+
+  START:
+    next: TASK-001
+
+  END:
+    status: Completed
+
+  ESCALATE:
+    status: Escalated
+
+    notify:
+      - Equipo SOC
+      - Responsable IT
+      - Responsable de Seguridad
+      - Dirección
