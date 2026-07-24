@@ -191,12 +191,6 @@ Para seguir correctamente esta documentación se recomienda disponer de conocimi
 
 🚧 En desarrollo
 
-| Incidente | Estado |
-|---|---|
-| 00-Metodologia | ✅ Completo |
-| 01-Usuario-Bloqueado | ✅ Completo |
-| 02-Contrasena-Comprometida → 18-Correo | 🚧 Pendiente de desarrollo |
-
 Este playbook se encuentra en continua evolución. Se irán incorporando nuevos procedimientos, herramientas, casos prácticos y mejoras conforme se amplíe la documentación y la experiencia operativa.
 
 ---
